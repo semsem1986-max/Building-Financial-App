@@ -89,7 +89,8 @@ dialog .btns{display:flex;gap:8px;flex-wrap:wrap}
     </div>
     <div class="acct">
       <span id="who"></span>
-      <button type="button" id="login">دخول المحررين</button>
+      <button type="button" id="login">Sign in</button>
+      <button type="button" id="signup">Sign up</button>
       <button type="button" id="logout" hidden>خروج</button>
     </div>
     <form class="row" id="setf" hidden style="flex-basis:100%">
@@ -123,13 +124,12 @@ dialog .btns{display:flex;gap:8px;flex-wrap:wrap}
 
 <dialog id="authd" aria-labelledby="auth-h">
   <form id="authf">
-    <h2 id="auth-h">دخول المحررين</h2>
+    <h2 id="auth-h">Sign in</h2>
     <label>البريد الإلكتروني<input id="a-email" type="email" required autocomplete="email" dir="ltr"></label>
     <label>كلمة السر<input id="a-pw" type="password" required minlength="6" autocomplete="current-password" dir="ltr"></label>
-    <div class="note" id="auth-msg" role="status">أول مرة؟ اكتب بريدك وكلمة سر جديدة واضغط (إنشاء حساب).</div>
+    <div class="note" id="auth-msg" role="status"></div>
     <div class="btns">
-      <button class="primary" type="submit" id="a-in">دخول</button>
-      <button type="submit" id="a-up">إنشاء حساب</button>
+      <button class="primary" type="submit" id="a-go">Sign in</button>
       <button type="button" id="a-cancel">إلغاء</button>
     </div>
   </form>
@@ -226,6 +226,15 @@ const FLOORS=["الأرضي","الأول","الثاني","الثالث","الر�
 function seedApts(){ for(let n=1;n<=24;n++) save("apartments/"+String(n).padStart(2,"0"),{no:n,floor:FLOORS[Math.floor((n-1)/4)],name:"",type:"مالك",phone:"",note:""}) }
 
 /* ---------- sign-in + roles ---------- */
+let authMode="in";
+function openAuth(mode){
+  authMode=mode; const up=mode==="up";
+  $("#auth-h").textContent=up?"Sign up":"Sign in";
+  $("#a-go").textContent=up?"Sign up":"Sign in";
+  $("#a-pw").autocomplete=up?"new-password":"current-password";
+  $("#auth-msg").textContent=up?"اكتب بريدك وكلمة سر جديدة (6 حروف على الأقل). هتوصلك رسالة تأكيد على البريد.":"";
+  $("#authd").showModal();
+}
 async function applySession(session){
   st.email=session?.user?.email||""; let role="none";
   if(session){ try{ await sb.rpc("claim_owner"); const r=await sb.rpc("my_role"); role=r.data||"none" }catch(e){} }
@@ -362,7 +371,7 @@ function render(){
   document.title=st.settings.name||"حسابات اتحاد الملاك";
   $("#bsub").textContent=`الاشتراك الشهري ${money(st.settings.fee)} · سنة ${st.settings.year}`;
   $("#setf").hidden=!w8; $("#restore").hidden=!w8; $("#tab-editors").hidden=!owner;
-  $("#login").hidden=!!st.email||!sb; $("#logout").hidden=!st.email; $("#who").textContent=st.email;
+  $("#login").hidden=!!st.email||!sb; $("#signup").hidden=!!st.email||!sb; $("#logout").hidden=!st.email; $("#who").textContent=st.email;
   $("#fnote").textContent=w8?"البيانات محفوظة على الإنترنت ومتاحة لكل من معه الرابط للعرض.":"عرض فقط. التعديل متاح للمحررين بعد تسجيل الدخول.";
   const b=$("#banner");
   if(st.offline){ b.hidden=false; b.textContent="تعذر الاتصال بقاعدة البيانات. المعروض آخر نسخة اتحفظت على الجهاز ده." }
@@ -387,11 +396,11 @@ document.addEventListener("submit",async e=>{
   if(id==="edf"){ const email=$("#e-email").value.trim().toLowerCase(); if(!email) return;
     const r=await sb.from("editors").insert({email}); if(r.error){ toast(r.error.code==="23505"?"البريد ده مضاف بالفعل":"تعذر إضافة المحرر"); return }
     await loadEditors(); document.activeElement.blur(); render(); toast("تمت إضافة المحرر") }
-  if(id==="authf"){ const email=$("#a-email").value.trim(), password=$("#a-pw").value, up=e.submitter&&e.submitter.id==="a-up", msg=$("#auth-msg");
+  if(id==="authf"){ const email=$("#a-email").value.trim(), password=$("#a-pw").value, up=authMode==="up", msg=$("#auth-msg");
     msg.textContent="لحظة…";
     const r=up?await sb.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname}}):await sb.auth.signInWithPassword({email,password});
     if(r.error){ msg.textContent=(up?"تعذر إنشاء الحساب: ":"تعذر الدخول: ")+r.error.message; return }
-    if(up&&!r.data.session){ msg.textContent="تم إنشاء الحساب. افتح رسالة التأكيد اللي وصلت بريدك، وبعدها ارجع هنا واضغط (دخول)."; return }
+    if(up&&!r.data.session){ msg.textContent="تم إنشاء الحساب. افتح رسالة التأكيد اللي وصلت بريدك، وبعدها ارجع هنا واضغط (Sign in)."; return }
     $("#a-pw").value=""; $("#authd").close() }
 });
 document.addEventListener("click",async e=>{
@@ -407,7 +416,8 @@ document.addEventListener("click",async e=>{
   if(id==="backup") backup();
   if(id==="restore") $("#restore-file").click();
   if(id==="print") print();
-  if(id==="login"){ $("#auth-msg").textContent="أول مرة؟ اكتب بريدك وكلمة سر جديدة واضغط (إنشاء حساب)."; $("#authd").showModal() }
+  if(id==="login") openAuth("in");
+  if(id==="signup") openAuth("up");
   if(id==="a-cancel") $("#authd").close();
   if(id==="logout") await sb.auth.signOut();
   if(id==="install"&&installEvt){ installEvt.prompt(); installEvt=null; $("#install").hidden=true }
