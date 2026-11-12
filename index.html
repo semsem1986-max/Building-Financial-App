@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>حسابات اتحاد الملاك</title>
+<meta name="description" content="دفتر حسابات اتحاد الملاك: التحصيل الشهري، الأعمال، والملخص.">
+<meta name="theme-color" content="#1d5c4a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+/* Layout: RTL ledger app. Top bar with building name, tab row, one working area per tab. */
+:root{
+  color-scheme:light;
+  --bg:#f3f5f4; --surface:#ffffff; --ink:#17231f; --muted:#5d6b66; --line:#d9e0dd;
+  --accent:#1d5c4a; --accent-ink:#ffffff; --head:#e6eeeb;
+  --ok-bg:#d8efe1; --ok:#14663a; --part-bg:#fbeec2; --part:#7a5300; --late-bg:#f9d6d2; --late:#9b1c12;
+  --font:"IBM Plex Sans Arabic","Segoe UI",Tahoma,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#101614; --surface:#18211e; --ink:#e7efec; --muted:#9bada6; --line:#2c3b36;
+  --accent:#6cc4a4; --accent-ink:#0c1512; --head:#202d29;
+  --ok-bg:#1b4531; --ok:#8be0b0; --part-bg:#4a3b10; --part:#f0cf72; --late-bg:#52201c; --late:#ffaaa1; color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.6;
+  padding-top:calc(16px + env(safe-area-inset-top,0px));padding-bottom:calc(40px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:end;justify-content:space-between}
+h1{font-size:22px;margin:0;font-weight:700;text-wrap:balance}
+.sub{color:var(--muted);font-size:13px}
+.acct{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+nav{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line)}
+nav a{padding:10px 14px;text-decoration:none;color:var(--muted);font-weight:500;white-space:nowrap;border-bottom:3px solid transparent}
+nav a[aria-current="page"]{color:var(--accent);border-color:var(--accent);font-weight:700}
+nav a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+section.panel{display:flex;flex-direction:column;gap:14px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px;min-width:0}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px 14px}
+.stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:12.5px}
+.stat.neg b{color:var(--late)}
+form.row{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--muted);min-width:0}
+input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:7px 9px;min-width:0;width:100%}
+label.w1{flex:1 1 90px}label.w2{flex:2 1 180px}label.w3{flex:3 1 240px}
+button{font:inherit;cursor:pointer;border-radius:4px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:7px 14px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button.link{border:0;background:none;color:var(--muted);padding:2px 6px;font-size:13px}
+button.link.warn{color:var(--late);font-weight:600}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:7px 10px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap}
+th{background:var(--head);font-weight:600;font-size:13px;position:sticky;top:0}
+td.l,th.l{text-align:right}
+tfoot td{font-weight:700;background:var(--head)}
+td.ok{background:var(--ok-bg);color:var(--ok);font-weight:600}
+td.part{background:var(--part-bg);color:var(--part);font-weight:600}
+td.late{background:var(--late-bg);color:var(--late);font-weight:600}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:2px;margin-inline-end:5px;vertical-align:-1px}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.note{font-size:12.5px;color:var(--muted)}
+.warnbox{background:var(--part-bg);color:var(--part);padding:8px 12px;border-radius:4px;font-size:13px}
+input.cb{width:20px;height:20px;padding:0;accent-color:var(--accent);cursor:pointer;vertical-align:middle}
+input.cb:disabled{cursor:default}
+footer{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;border-top:1px solid var(--line);padding-top:12px}
+footer .btns{display:flex;gap:8px;flex-wrap:wrap}
+dialog{border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:18px;width:min(380px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog form{display:flex;flex-direction:column;gap:12px}
+dialog h2{margin:0;font-size:17px}
+dialog .btns{display:flex;gap:8px;flex-wrap:wrap}
+[hidden]{display:none!important}
+@media print{header form,.acct,nav,footer,form#workf,.note,button{display:none!important} body{background:#fff;padding:0} .scroll{overflow:visible;border:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1 id="bname">حسابات اتحاد الملاك</h1>
+      <div class="sub" id="bsub"></div>
+    </div>
+    <div class="acct">
+      <span id="who"></span>
+      <button type="button" id="login">دخول المحررين</button>
+      <button type="button" id="logout" hidden>خروج</button>
+    </div>
+    <form class="row" id="setf" hidden style="flex-basis:100%">
+      <label class="w2">اسم العمارة<input id="s-name" type="text"></label>
+      <label class="w1">الاشتراك الشهري (ج.م)<input id="s-fee" type="number" min="0" step="any"></label>
+      <label class="w1">السنة<input id="s-year" type="number" min="2020" max="2100"></label>
+      <button class="primary" type="submit">حفظ الإعدادات</button>
+    </form>
+  </header>
+  <div class="warnbox" id="banner" hidden></div>
+  <nav id="tabs" aria-label="الأقسام">
+    <a href="#dashboard" data-t="dashboard">التحصيل الشهري</a>
+    <a href="#payments" data-t="payments">تفاصيل الدفع</a>
+    <a href="#works" data-t="works">الأعمال</a>
+    <a href="#summary" data-t="summary">الملخص الشهري</a>
+    <a href="#apartments" data-t="apartments">الشقق</a>
+    <a href="#editors" data-t="editors" id="tab-editors" hidden>المحررون</a>
+  </nav>
+  <main id="main"></main>
+  <footer>
+    <div class="note" id="fnote"></div>
+    <div class="btns">
+      <button type="button" id="install" hidden>تثبيت التطبيق</button>
+      <button type="button" id="backup">تنزيل نسخة احتياطية</button>
+      <button type="button" id="restore" hidden>استرجاع نسخة</button>
+      <button type="button" id="print">طباعة</button>
+      <input type="file" id="restore-file" accept="application/json,.json" hidden>
+    </div>
+  </footer>
+</div>
+
+<dialog id="authd" aria-labelledby="auth-h">
+  <form id="authf">
+    <h2 id="auth-h">دخول المحررين</h2>
+    <label>البريد الإلكتروني<input id="a-email" type="email" required autocomplete="email" dir="ltr"></label>
+    <label>كلمة السر<input id="a-pw" type="password" required minlength="6" autocomplete="current-password" dir="ltr"></label>
+    <div class="note" id="auth-msg" role="status">أول مرة؟ اكتب بريدك وكلمة سر جديدة واضغط (إنشاء حساب).</div>
+    <div class="btns">
+      <button class="primary" type="submit" id="a-in">دخول</button>
+      <button type="submit" id="a-up">إنشاء حساب</button>
+      <button type="button" id="a-cancel">إلغاء</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const MONTHS=["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+const CATS=["صيانة","نظافة","كهرباء","مياه","أسانسير","حارس","أمن","تجديدات","أخرى"];
+const METHODS=["نقدي","تحويل بنكي","فودافون كاش","إنستاباي"];
+const TABS=["dashboard","payments","works","summary","apartments","editors"];
+const st={settings:{name:"عمارة النور - اتحاد الملاك",fee:150,year:2026},apts:[],pays:[],works:[],editors:[],ready:false,role:"none",email:"",offline:false};
+let tab="dashboard", pendingDel=null, filterMonth="", stale=false;
+const $=s=>document.querySelector(s);
+const canWrite=()=>st.role!=="none";
+const dis=()=>canWrite()?"":"disabled";
+const nf=new Intl.NumberFormat("ar-EG",{maximumFractionDigits:2});
+const money=n=>nf.format(Math.round((n||0)*100)/100)+" ج.م";
+const num=n=>nf.format(n);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+const dueMonths=()=>{const y=new Date().getFullYear(),m=new Date().getMonth()+1;return st.settings.year<y?12:st.settings.year>y?0:m};
+const opts=(arr,sel)=>arr.map(v=>`<option value="${esc(v)}"${v===sel?" selected":""}>${esc(v)}</option>`).join("");
+const monthOpts=sel=>MONTHS.map((v,i)=>`<option value="${i+1}"${i+1===sel?" selected":""}>${v}</option>`).join("");
+function toast(t){const e=document.createElement("div");e.setAttribute("role","status");e.textContent=t;e.style.cssText="position:fixed;bottom:20px;inset-inline:0;margin:auto;width:max-content;max-width:90%;background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:4px;z-index:20";document.body.append(e);setTimeout(()=>e.remove(),2600)}
+const sortBy=(a,k,dir=1)=>a.sort((x,y)=>(x[k]>y[k]?1:x[k]<y[k]?-1:0)*dir);
+
+/* ---------- data layer: shared Supabase database ----------
+   Anyone can read; only approved editors (table "editors") can write. Enforced by the database, not by this page. */
+const SB_URL="https://zshqtmyslrflzauvwjkh.supabase.co";
+const SB_KEY="sb_publishable_0yKyHULcVcm9PkwSNpzzgg_U4n4T7fi"; // publishable key: safe to ship in the page
+const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;
+const CACHE_KEY="building-financial-cache-v2"; // last public snapshot, shown while loading or offline
+const empty=()=>({meta:{},apartments:{},payments:{},works:{}});
+let data=empty(), pending=0, reloadT=null;
+
+const rowOf={ // app record -> database row
+  apartments:(id,r)=>({id,no:+r.no||0,floor:r.floor||"",name:r.name||"",type:r.type||"مالك"}),
+  payments:(id,r)=>({id,apt:+r.apt||0,month:+r.month||1,year:+r.year||0,amount:+r.amount||0,date:r.date||null,method:r.method||METHODS[0]}),
+  works:(id,r)=>({id,date:r.date||today(),description:r.desc||"",cat:r.cat||"",vendor:r.who||"",cost:+r.cost||0})
+};
+const privOf=(id,r)=>({id,phone:r.phone||"",note:r.note||""});
+const setOf=r=>({id:1,name:r.name||"",fee:+r.fee||0,year:+r.year||new Date().getFullYear()});
+
+async function loadAll(){
+  if(!sb) throw new Error("offline");
+  const q=[sb.from("settings").select("*").eq("id",1).maybeSingle(),sb.from("apartments").select("*"),sb.from("payments").select("*"),sb.from("works").select("*")];
+  if(canWrite()) q.push(sb.from("apartment_private").select("*"));
+  const r=await Promise.all(q); const bad=r.find(x=>x.error); if(bad) throw bad.error;
+  const d=empty();
+  if(r[0].data){ const s=r[0].data; d.meta.settings={name:s.name,fee:+s.fee,year:+s.year} }
+  for(const a of r[1].data) d.apartments[a.id]={no:a.no,floor:a.floor,name:a.name,type:a.type,phone:"",note:""};
+  for(const p of r[2].data) d.payments[p.id]={apt:p.apt,month:p.month,year:p.year,amount:+p.amount,date:p.date||"",method:p.method};
+  for(const w of r[3].data) d.works[w.id]={date:w.date,desc:w.description,cat:w.cat,who:w.vendor,cost:+w.cost};
+  try{ localStorage.setItem(CACHE_KEY,JSON.stringify(d)) }catch(e){}
+  if(r[4]) for(const x of r[4].data) if(d.apartments[x.id]){ d.apartments[x.id].phone=x.phone; d.apartments[x.id].note=x.note }
+  data=d;
+}
+async function push(path,rec){ // write one record; rec===null deletes it
+  const [c,id]=path.split("/"); let res;
+  if(c==="meta") res=await sb.from("settings").upsert(setOf(rec));
+  else if(rec===null) res=await sb.from(c).delete().eq("id",id);
+  else { res=await sb.from(c).upsert(rowOf[c](id,rec));
+    if(!res.error&&c==="apartments") res=await sb.from("apartment_private").upsert(privOf(id,rec)) }
+  if(res.error) throw res.error;
+}
+function write(path,rec,failMsg){
+  if(!canWrite()||!sb){ toast("التعديل متاح للمحررين بعد تسجيل الدخول"); return false }
+  const [c,id]=path.split("/");
+  if(rec===null) delete data[c][id]; else data[c][id]=rec; // show the change right away
+  pending++;
+  push(path,rec).catch(()=>{ toast(failMsg); reloadSoon() }).finally(()=>{pending--});
+  return true;
+}
+const save=(path,rec)=>write(path,rec,"تعذر الحفظ");
+const del=path=>write(path,null,"تعذر الحذف");
+function reloadSoon(){ // re-read from the database once our own writes have settled
+  clearTimeout(reloadT);
+  reloadT=setTimeout(async()=>{ if(pending){reloadSoon();return} try{await loadAll();st.offline=false}catch(e){st.offline=true} softRefresh() },400);
+}
+
+function sync(){ // pull state out of the loaded data
+  if(data.meta.settings) Object.assign(st.settings,data.meta.settings);
+  const list=c=>Object.entries(data[c]).map(([id,d])=>({id,...d}));
+  st.apts=sortBy(list("apartments"),"no");
+  st.pays=sortBy(list("payments"),"date",-1);
+  st.works=sortBy(list("works"),"date",-1);
+}
+function refresh(){ sync(); render() }
+const editing=()=>{const ae=document.activeElement;return !!(ae&&ae.closest&&ae.closest("#main")&&/INPUT|SELECT/.test(ae.tagName)&&ae.type!=="checkbox")};
+function softRefresh(){ sync(); if(editing()){stale=true;return} stale=false; render() } // don't redraw under someone typing
+document.addEventListener("focusout",()=>setTimeout(()=>{ if(stale&&!editing()){stale=false;render()} },0));
+
+const FLOORS=["الأرضي","الأول","الثاني","الثالث","الرابع","الخامس"];
+function seedApts(){ for(let n=1;n<=24;n++) save("apartments/"+String(n).padStart(2,"0"),{no:n,floor:FLOORS[Math.floor((n-1)/4)],name:"",type:"مالك",phone:"",note:""}) }
+
+/* ---------- sign-in + roles ---------- */
+async function applySession(session){
+  st.email=session?.user?.email||""; let role="none";
+  if(session){ try{ await sb.rpc("claim_owner"); const r=await sb.rpc("my_role"); role=r.data||"none" }catch(e){} }
+  st.role=role;
+  if(role==="owner") await loadEditors(); else st.editors=[];
+  try{ await loadAll(); st.offline=false }catch(e){ st.offline=true }
+  st.ready=true; softRefresh();
+}
+async function loadEditors(){ const r=await sb.from("editors").select("email,owner").order("added_at"); st.editors=r.data||[] }
+function boot(){
+  try{ const c=JSON.parse(localStorage.getItem(CACHE_KEY)); if(c&&c.apartments){ data=Object.assign(empty(),c); st.ready=true } }catch(e){}
+  sync();
+  if(!sb){ st.offline=true; st.ready=true; return }
+  let lastUser; // token refreshes fire this too; only reload when the signed-in user actually changes
+  sb.auth.onAuthStateChange((ev,session)=>{ const u=session?.user?.id||""; if(u===lastUser) return; lastUser=u; setTimeout(()=>applySession(session),0) });
+  sb.channel("ledger").on("postgres_changes",{event:"*",schema:"public"},reloadSoon).subscribe();
+  addEventListener("online",reloadSoon);
+}
+
+/* ---------- calculations ---------- */
+function paidMap(){ // apt no -> month(1-12) -> amount, for the working year
+  const m={};
+  for(const p of st.pays){ if(+p.year!==+st.settings.year) continue; (m[p.apt]??={}); m[p.apt][p.month]=(m[p.apt][p.month]||0)+(+p.amount||0) }
+  return m;
+}
+const aptName=no=>{const a=st.apts.find(x=>+x.no===+no);return a&&a.name?a.name:"—"};
+
+/* ---------- views ---------- */
+function vDashboard(){
+  if(!st.apts.length) return vNoApts();
+  const pm=paidMap(),fee=+st.settings.fee,due=dueMonths();
+  let totalPaid=0,totalDue=0,late=0; const colTot=Array(12).fill(0);
+  const rows=st.apts.map(a=>{
+    const row=pm[a.no]||{}; let paid=0;
+    const cells=MONTHS.map((_,i)=>{
+      const v=row[i+1]||0; paid+=v; colTot[i]+=v;
+      const on=(i+1) in row;
+      const cls=on?(v>=fee?"ok":"part"):(i+1<=due?"late":"");
+      const tip=on&&v!==fee?` title="${esc(num(v))} ج.م"`:"";
+      return `<td class="${cls}"${tip}><input type="checkbox" class="cb" data-apt="${a.no}" data-m="${i+1}" ${on?"checked":""} ${dis()} aria-label="شقة ${a.no} - ${MONTHS[i]}"></td>`;
+    }).join("");
+    const owed=Math.max(fee*due-paid,0); totalPaid+=paid; totalDue+=fee*due; if(owed>0) late++;
+    return `<tr><td>${num(a.no)}</td><td class="l">${esc(a.name||"—")}</td>${cells}<td>${num(paid)}</td><td${owed?' class="late"':""}>${num(owed)}</td></tr>`;
+  }).join("");
+  return `
+  <div class="stats">
+    <div class="stat"><b>${money(totalPaid)}</b><span>إجمالي المحصّل في ${st.settings.year}</span></div>
+    <div class="stat"><b>${money(totalDue)}</b><span>المستحق حتى الآن (${num(due)} شهر)</span></div>
+    <div class="stat ${totalDue>totalPaid?"neg":""}"><b>${money(Math.max(totalDue-totalPaid,0))}</b><span>إجمالي المتأخرات</span></div>
+    <div class="stat"><b>${num(late)} من ${num(st.apts.length)}</b><span>شقق عليها متأخرات</span></div>
+  </div>
+  ${canWrite()?'<div class="note">اضغط على المربع قدام الشقة تحت الشهر اللي دفعته. لتعديل المبلغ أو التاريخ افتح (تفاصيل الدفع).</div>':""}
+  <div class="legend"><span><i style="background:var(--ok-bg)"></i>مدفوع</span><span><i style="background:var(--part-bg)"></i>مدفوع جزئياً</span><span><i style="background:var(--late-bg)"></i>متأخر</span></div>
+  <div class="scroll"><table><thead><tr><th>الشقة</th><th class="l">الاسم</th>${MONTHS.map(m=>`<th>${m}</th>`).join("")}<th>المدفوع</th><th>المتبقي</th></tr></thead><tbody>${rows}</tbody>
+  <tfoot><tr><td colspan="2" class="l">إجمالي الشهر</td>${colTot.map(v=>`<td>${v?num(v):""}</td>`).join("")}<td>${num(totalPaid)}</td><td>${num(Math.max(totalDue-totalPaid,0))}</td></tr></tfoot></table></div>`;
+}
+function vNoApts(){
+  return `<div class="card empty">لسه ما فيش شقق مسجلة.${canWrite()?'<br><br><button class="primary" id="seed">تجهيز 24 شقة</button><div class="note" style="margin-top:8px">هتتعمل شقق فاضية وتكتب أسماء السكان من قسم (الشقق).</div>':""}</div>`;
+}
+function vPayments(){
+  const yr=+st.settings.year;
+  const list=st.pays.filter(p=>+p.year===yr).sort((x,y)=>(x.month-y.month)||(x.apt-y.apt));
+  const rows=list.map(p=>`<tr data-pid="${esc(p.id)}"><td>${num(p.apt)}</td><td class="l">${esc(aptName(p.apt))}</td><td>${MONTHS[p.month-1]}</td>`+
+    (canWrite()?`<td><input type="number" data-pf="amount" min="0" step="any" value="${+p.amount||0}" style="width:110px" aria-label="المبلغ"></td>
+    <td><input type="date" data-pf="date" value="${esc(p.date||"")}" style="width:150px" aria-label="تاريخ الدفع"></td>
+    <td><select data-pf="method" aria-label="طريقة الدفع">${opts(METHODS,p.method||METHODS[0])}</select></td>`
+    :`<td>${money(p.amount)}</td><td>${esc(p.date||"—")}</td><td>${esc(p.method||"")}</td>`)+`</tr>`).join("");
+  return `${canWrite()?'<div class="note">كل دفعة بتتسجل لما تعلّم المربع في (التحصيل الشهري). هنا تعدّل المبلغ لو الشقة دفعت مبلغ مختلف، أو تكتب تاريخ الدفع وطريقته. التعديل بيتحفظ تلقائياً.</div>':""}
+  ${list.length?`<div class="scroll"><table><thead><tr><th>الشقة</th><th class="l">الاسم</th><th>عن شهر</th><th>المبلغ</th><th>تاريخ الدفع</th><th>طريقة الدفع</th></tr></thead><tbody>${rows}</tbody></table></div>`:`<div class="card empty">ما فيش دفعات مسجلة في ${yr} بعد.</div>`}`;
+}
+function togglePay(apt,m,on){
+  const id=`${st.settings.year}-${apt}-${m}`;
+  if(on) save("payments/"+id,{apt:+apt,month:+m,year:+st.settings.year,amount:+st.settings.fee,date:today(),method:METHODS[0]});
+  else del("payments/"+id);
+  refresh();
+}
+function vWorks(){
+  const yr=st.settings.year, w8=canWrite();
+  const inYear=st.works.filter(w=>(w.date||"").startsWith(String(yr)));
+  const list=inYear.filter(w=>!filterMonth||+w.date.slice(5,7)===+filterMonth);
+  const total=list.reduce((s,w)=>s+(+w.cost||0),0);
+  const form=w8?`<form class="row card" id="workf">
+    <label class="w1">تاريخ التنفيذ<input id="w-date" type="date" value="${today()}" required></label>
+    <label class="w3">وصف العمل<input id="w-desc" type="text" required placeholder="مثال: صيانة الأسانسير"></label>
+    <label class="w1">التصنيف<select id="w-cat">${opts(CATS)}</select></label>
+    <label class="w2">المنفذ / المورد<input id="w-who" type="text"></label>
+    <label class="w1">التكلفة<input id="w-cost" type="number" min="0" step="any" required></label>
+    <button class="primary" type="submit">إضافة عمل</button></form>`:"";
+  const rows=list.map(w=>`<tr><td>${esc(w.date)}</td><td>${MONTHS[+w.date.slice(5,7)-1]}</td><td class="l">${esc(w.desc)}</td><td>${esc(w.cat||"")}</td><td>${esc(w.who||"")}</td><td>${money(w.cost)}</td>${w8?`<td>${delBtn("works",w.id)}</td>`:""}</tr>`).join("");
+  return `${form}
+  <div class="bar"><label style="flex-direction:row;align-items:center;gap:8px">الشهر<select id="w-filter" style="width:auto"><option value="">كل شهور ${yr}</option>${monthOpts(+filterMonth)}</select></label><b>إجمالي التكلفة: ${money(total)}</b></div>
+  ${list.length?`<div class="scroll"><table><thead><tr><th>التاريخ</th><th>الشهر</th><th class="l">العمل</th><th>التصنيف</th><th>المنفذ</th><th>التكلفة</th>${w8?"<th></th>":""}</tr></thead><tbody>${rows}</tbody><tfoot><tr><td colspan="5" class="l">الإجمالي</td><td>${money(total)}</td>${w8?"<td></td>":""}</tr></tfoot></table></div>`:`<div class="card empty">ما فيش أعمال مسجلة ${filterMonth?"في الشهر ده":"بعد"}.</div>`}`;
+}
+function vSummary(){
+  const yr=+st.settings.year; let bal=0,tin=0,tout=0,tn=0;
+  const pm={}; st.pays.forEach(p=>{if(+p.year===yr)pm[p.month]=(pm[p.month]||0)+(+p.amount||0)});
+  const wm={},wc={}; st.works.forEach(w=>{if((w.date||"").startsWith(String(yr))){const m=+w.date.slice(5,7);wm[m]=(wm[m]||0)+(+w.cost||0);wc[m]=(wc[m]||0)+1}});
+  const rows=MONTHS.map((n,i)=>{const m=i+1,a=pm[m]||0,b=wm[m]||0;bal+=a-b;tin+=a;tout+=b;tn+=wc[m]||0;
+    return `<tr><td class="l">${n}</td><td>${money(a)}</td><td>${money(b)}</td><td${a-b<0?' class="late"':""}>${money(a-b)}</td><td${bal<0?' class="late"':""}>${money(bal)}</td><td>${num(wc[m]||0)}</td></tr>`}).join("");
+  return `<div class="stats">
+    <div class="stat"><b>${money(tin)}</b><span>إجمالي التحصيل</span></div>
+    <div class="stat"><b>${money(tout)}</b><span>إجمالي المصروفات</span></div>
+    <div class="stat ${bal<0?"neg":""}"><b>${money(bal)}</b><span>رصيد الصندوق</span></div></div>
+  <div class="scroll"><table><thead><tr><th class="l">الشهر</th><th>التحصيل</th><th>المصروفات</th><th>صافي الشهر</th><th>الرصيد التراكمي</th><th>عدد الأعمال</th></tr></thead><tbody>${rows}</tbody>
+  <tfoot><tr><td class="l">الإجمالي ${yr}</td><td>${money(tin)}</td><td>${money(tout)}</td><td>${money(tin-tout)}</td><td>${money(bal)}</td><td>${num(tn)}</td></tr></tfoot></table></div>`;
+}
+function vApartments(){
+  if(!st.apts.length) return vNoApts();
+  if(!canWrite()){ // viewers: names only, no phones or notes
+    const rows=st.apts.map(a=>`<tr><td>${num(a.no)}</td><td>${esc(a.floor||"")}</td><td>${esc(a.name||"—")}</td><td>${esc(a.type||"")}</td></tr>`).join("");
+    return `<div class="scroll"><table><thead><tr><th>الشقة</th><th>الدور</th><th>المالك / الساكن</th><th>النوع</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+  const rows=st.apts.map(a=>`<tr data-id="${esc(a.id)}"><td>${num(a.no)}</td>
+    <td><input data-f="floor" value="${esc(a.floor||"")}" aria-label="الدور"></td>
+    <td><input data-f="name" value="${esc(a.name||"")}" placeholder="اسم المالك / الساكن" aria-label="المالك / الساكن"></td>
+    <td><select data-f="type" aria-label="النوع">${opts(["مالك","مستأجر","مغلقة"],a.type||"مالك")}</select></td>
+    <td><input data-f="phone" value="${esc(a.phone||"")}" inputmode="tel" aria-label="التليفون"></td>
+    <td><input data-f="note" value="${esc(a.note||"")}" aria-label="ملاحظات"></td></tr>`).join("");
+  return `<div class="note">التعديل بيتحفظ تلقائياً بمجرد ما تخرج من الخانة. التليفون والملاحظات بيشوفهم المحررون فقط.</div>
+  <div class="scroll"><table><thead><tr><th>الشقة</th><th>الدور</th><th>المالك / الساكن</th><th>النوع</th><th>التليفون</th><th>ملاحظات</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function vEditors(){
+  const rows=st.editors.map(e=>`<tr><td class="l" dir="ltr">${esc(e.email)}</td><td>${e.owner?"المسؤول":"محرر"}</td><td>${e.owner?"":delBtn("editors",e.email)}</td></tr>`).join("");
+  return `<div class="note">أي حد تضيف بريده هنا يقدر يعدّل البيانات بعد ما ينشئ حساب بنفس البريد ويسجل الدخول. باقي الناس بيشوفوا فقط.</div>
+  <form class="row card" id="edf"><label class="w3">بريد المحرر الجديد<input id="e-email" type="email" required dir="ltr"></label><button class="primary" type="submit">إضافة محرر</button></form>
+  <div class="scroll"><table><thead><tr><th class="l">البريد</th><th>الصلاحية</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+const delBtn=(col,id)=>{const k=col+"/"+id;return pendingDel===k?`<button class="link warn" data-del="${esc(k)}">تأكيد الحذف؟</button>`:`<button class="link" data-del="${esc(k)}">حذف</button>`};
+
+/* ---------- render + events ---------- */
+function render(){
+  const w8=canWrite(), owner=st.role==="owner";
+  $("#bname").textContent=st.settings.name||"حسابات اتحاد الملاك";
+  document.title=st.settings.name||"حسابات اتحاد الملاك";
+  $("#bsub").textContent=`الاشتراك الشهري ${money(st.settings.fee)} · سنة ${st.settings.year}`;
+  $("#setf").hidden=!w8; $("#restore").hidden=!w8; $("#tab-editors").hidden=!owner;
+  $("#login").hidden=!!st.email||!sb; $("#logout").hidden=!st.email; $("#who").textContent=st.email;
+  $("#fnote").textContent=w8?"البيانات محفوظة على الإنترنت ومتاحة لكل من معه الرابط للعرض.":"عرض فقط. التعديل متاح للمحررين بعد تسجيل الدخول.";
+  const b=$("#banner");
+  if(st.offline){ b.hidden=false; b.textContent="تعذر الاتصال بقاعدة البيانات. المعروض آخر نسخة اتحفظت على الجهاز ده." }
+  else if(st.email&&!w8){ b.hidden=false; b.textContent="حسابك لسه مش معتمد كمحرر. اطلب من مسؤول الاتحاد يضيف بريدك في قسم (المحررون)." }
+  else b.hidden=true;
+  const ae=document.activeElement;
+  if(!(ae&&ae.closest&&ae.closest("#setf"))){ $("#s-name").value=st.settings.name; $("#s-fee").value=st.settings.fee; $("#s-year").value=st.settings.year }
+  if(tab==="editors"&&!owner) tab="dashboard";
+  document.querySelectorAll("#tabs a").forEach(a=>{ if(a.dataset.t===tab)a.setAttribute("aria-current","page"); else a.removeAttribute("aria-current") });
+  const v={dashboard:vDashboard,payments:vPayments,works:vWorks,summary:vSummary,apartments:vApartments,editors:vEditors}[tab];
+  $("#main").innerHTML=`<section class="panel">${st.ready?v():'<div class="empty">جاري التحميل…</div>'}</section>`;
+}
+function route(){const h=location.hash.slice(1);tab=TABS.includes(h)?h:"dashboard";render()}
+addEventListener("hashchange",route);
+
+document.addEventListener("submit",async e=>{
+  e.preventDefault(); const id=e.target.id;
+  if(id==="setf"){ const s={name:$("#s-name").value.trim(),fee:+$("#s-fee").value||0,year:+$("#s-year").value||new Date().getFullYear()};
+    if(save("meta/settings",s)) toast("تم حفظ الإعدادات"); document.activeElement.blur(); refresh() }
+  if(id==="workf"){ const rec={date:$("#w-date").value,desc:$("#w-desc").value.trim(),cat:$("#w-cat").value,who:$("#w-who").value.trim(),cost:+$("#w-cost").value};
+    if(save("works/"+Date.now().toString(36),rec)) toast("تم تسجيل العمل"); document.activeElement.blur(); refresh() }
+  if(id==="edf"){ const email=$("#e-email").value.trim().toLowerCase(); if(!email) return;
+    const r=await sb.from("editors").insert({email}); if(r.error){ toast(r.error.code==="23505"?"البريد ده مضاف بالفعل":"تعذر إضافة المحرر"); return }
+    await loadEditors(); document.activeElement.blur(); render(); toast("تمت إضافة المحرر") }
+  if(id==="authf"){ const email=$("#a-email").value.trim(), password=$("#a-pw").value, up=e.submitter&&e.submitter.id==="a-up", msg=$("#auth-msg");
+    msg.textContent="لحظة…";
+    const r=up?await sb.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname}}):await sb.auth.signInWithPassword({email,password});
+    if(r.error){ msg.textContent=(up?"تعذر إنشاء الحساب: ":"تعذر الدخول: ")+r.error.message; return }
+    if(up&&!r.data.session){ msg.textContent="تم إنشاء الحساب. افتح رسالة التأكيد اللي وصلت بريدك، وبعدها ارجع هنا واضغط (دخول)."; return }
+    $("#a-pw").value=""; $("#authd").close() }
+});
+document.addEventListener("click",async e=>{
+  const d=e.target.closest("[data-del]");
+  if(d){ const k=d.dataset.del;
+    if(pendingDel!==k){ pendingDel=k;render();setTimeout(()=>{if(pendingDel===k){pendingDel=null;render()}},4000); return }
+    pendingDel=null;
+    if(k.startsWith("editors/")){ const r=await sb.from("editors").delete().eq("email",k.slice(8)); if(r.error) toast("تعذر الحذف"); await loadEditors(); render() }
+    else { del(k); refresh() }
+    return }
+  const id=e.target.id;
+  if(id==="seed"){ seedApts(); toast("تم تجهيز الشقق"); refresh() }
+  if(id==="backup") backup();
+  if(id==="restore") $("#restore-file").click();
+  if(id==="print") print();
+  if(id==="login"){ $("#auth-msg").textContent="أول مرة؟ اكتب بريدك وكلمة سر جديدة واضغط (إنشاء حساب)."; $("#authd").showModal() }
+  if(id==="a-cancel") $("#authd").close();
+  if(id==="logout") await sb.auth.signOut();
+  if(id==="install"&&installEvt){ installEvt.prompt(); installEvt=null; $("#install").hidden=true }
+});
+document.addEventListener("change",e=>{
+  const t=e.target;
+  if(t.id==="restore-file"){ restore(t.files[0]); t.value=""; return }
+  if(t.classList.contains("cb")){ togglePay(t.dataset.apt,t.dataset.m,t.checked); return }
+  if(t.dataset.pf){ const id=t.closest("tr").dataset.pid; const p=st.pays.find(x=>x.id===id); if(!p)return; p[t.dataset.pf]=t.dataset.pf==="amount"?(+t.value||0):t.value; const {id:_,...rest}=p; if(save("payments/"+id,rest)) toast("تم الحفظ"); return }
+  if(t.id==="w-filter"){filterMonth=t.value;render();return}
+  if(t.dataset.f){ const tr=t.closest("tr"); const a=st.apts.find(x=>x.id===tr.dataset.id); if(!a)return; a[t.dataset.f]=t.value.trim(); const {id,...rest}=a; if(save("apartments/"+id,rest)) toast("تم الحفظ") }
+});
+
+/* ---------- backup / restore ---------- */
+function backup(){
+  const blob=new Blob([JSON.stringify({app:"building-financial",version:1,exported:new Date().toISOString(),data},null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`building-financial-${today()}.json`;
+  document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+async function restore(file){ // editors only: replaces everything in the shared database with the file's contents
+  if(!file||!canWrite()) return;
+  let obj; try{ obj=JSON.parse(await file.text()) }catch(e){ toast("الملف غير صالح"); return }
+  const d=obj&&obj.app==="building-financial"?obj.data:null;
+  if(!d||typeof d!=="object"){ toast("الملف ده مش نسخة احتياطية من التطبيق"); return }
+  if(!confirm("الاسترجاع هيستبدل كل البيانات المشتركة بالنسخة دي عند كل الناس. هتنزل نسخة من البيانات الحالية الأول. تكمل؟")) return;
+  backup();
+  const ent=c=>Object.entries((d[c]&&typeof d[c]==="object"&&d[c])||{});
+  const ok=r=>{ if(r.error) throw r.error };
+  try{
+    for(const t of ["payments","works","apartment_private","apartments"]) ok(await sb.from(t).delete().neq("id",""));
+    const ap=ent("apartments");
+    if(ap.length){ ok(await sb.from("apartments").insert(ap.map(([id,r])=>rowOf.apartments(id,r)))); ok(await sb.from("apartment_private").insert(ap.map(([id,r])=>privOf(id,r)))) }
+    for(const c of ["payments","works"]){ const rows=ent(c).map(([id,r])=>rowOf[c](id,r)); if(rows.length) ok(await sb.from(c).insert(rows)) }
+    if(d.meta&&d.meta.settings) ok(await sb.from("settings").upsert(setOf(d.meta.settings)));
+    toast("تم استرجاع النسخة");
+  }catch(e){ toast("تعذر إكمال الاسترجاع. استخدم النسخة اللي نزلت للتو للرجوع") }
+  try{ await loadAll() }catch(e){}
+  refresh();
+}
+
+/* ---------- install + offline ---------- */
+let installEvt=null;
+addEventListener("beforeinstallprompt",e=>{ e.preventDefault(); installEvt=e; $("#install").hidden=false });
+addEventListener("appinstalled",()=>{ $("#install").hidden=true });
+if("serviceWorker" in navigator&&location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(()=>{});
+
+boot(); route();
+</script>
+</body>
+</html>
